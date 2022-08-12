@@ -1,0 +1,232 @@
+---
+title: "Modeling and prediction for movies"
+author: Michelle Lin
+date: July 15, 2022
+output: 
+    pdf_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+library(knitr)
+library(formatR)
+opts_chunk$set(tidy.opts=list(width.cutoff=80),tidy=TRUE)
+```
+
+### Load data
+
+```{r load-data}
+load("/cloud/project/movies.rdata")
+```
+
+
+
+* * *
+
+## Data Introduction
+
+This study is an experimental study given that there was random sample selection. The data consists of 651 randomly sampled movies that were produced and released prior to 2016. Although randomly sampled, I would hesitate in generalizing the trends found in this analysis to movies past 2016, since movie trends and production methods can vary year to year. Moreover, a potential source of bias could arise given that movie information was sampled from Rotten Tomatoes and IMDB, which excludes foreign films or smaller indie films that do not publish information on those sites. However, overall, these biases will have negligible impact since the data and the findings of the study will be published in the context of Western films in the United States.
+
+* * *
+
+## Research Questions Posed
+
+What characteristics of a movie correlate with higher audience scores for a movie on Rotten Tomatoes? Specifically, which of the following variables are correlated with higher audience scores? 
+
+- Genre
+- Critics Score on Rotten Tomatoes
+- IMDB rating
+- Whether or not a movie is in the Top 200 Box Office List
+- MPAA Rating
+
+* * *
+
+##Exploratory data analysis
+
+I'd like to look at the variables of interest to see whether or not they are feasible for statistical analysis. Statistical analysis was conducted to ensure that the variables satisfy the conditions for Multiple Linear Regression modeling, which are: 
+- Linear relationships between the explanatory and response variable (x and y)
+- Nearly normal residuals 
+- Constant variability of residuals 
+
+```{r}
+
+#First 3 variables are categorical, will wait until multiple linear regression
+#fit to conduct statistical analysis. For now, just focused on visualizing
+#distribution of categorical data.
+
+#distribution of movie genre in data set
+summary(movies$genre)
+boxplot(audience_score ~ genre, data = movies)
+
+#distribution of whether or not a movie is in the Top 200 Box
+summary(movies$top200_box)
+boxplot(audience_score ~ top200_box, data = movies)
+
+#distribution of movie MPAA rating 
+summary(movies$mpaa_rating)
+boxplot(audience_score ~ mpaa_rating, data = movies)
+
+#Last 2 variables are numerical, will conduct preliminary linear modeling to
+#determine whether multiple linear regression conditions are satisfied before
+#combining into multiple linear regression.
+
+#distribution of critics score on Rotten Tomatoes
+summary(movies$critics_score)
+ggplot(data = movies, aes(x = critics_score, y = audience_score)) + geom_jitter() + xlab("Critic Score") + ylab("Audience Score")
+cs1 <- lm(audience_score ~ critics_score, data = movies)
+summary(cs1)
+
+#check for linearity and constant variability
+ggplot(data = cs1, aes(x = .fitted, y = .resid)) + geom_jitter() + geom_hline(yintercept = 0, linetype = "dashed") + xlab("Fitted Values") + ylab("Residuals")
+
+#check for nearly normal residuals
+ggplot(data = cs1, aes(x = .resid)) + geom_histogram()
+ggplot(data = cs1, aes(sample = .resid)) + stat_qq()
+
+#distribution of IMDB rating
+summary(movies$imdb_rating)
+ggplot(data = movies, aes(x = imdb_rating, y = audience_score)) + geom_jitter() + xlab("IMDB Rating") + ylab("Audience Score")
+imdb1 <- lm(audience_score ~ imdb_rating, data = movies)
+summary(imdb1)
+
+#check for linearity and constant variability
+ggplot(data = imdb1, aes(x = .fitted, y = .resid)) + geom_jitter() + geom_hline(yintercept = 0, linetype = "dashed") + xlab("Fitted Values") + ylab("Residuals")
+
+#check for nearly normal residuals
+ggplot(data = imdb1, aes(x = .resid)) + geom_histogram() + xlab("Residuals")
+ggplot(data = imdb1, aes(sample = .resid)) + stat_qq()
+```
+
+Can conclude that there is a linear relationship between audience score and critics score from Rotten Tomatoes. However, the same can not be said for the relationship between audience score on Rotten Tomatoes and IMDB ratings. There is a slight right skew in the data, and the residuals do not seem to have constant variance around mean of 0. However, it will be considered in the full model analysis for educational purposes and may be removed when selecting the parsimonious model. 
+
+
+* * *
+
+## Full Model and Parsimonious Model Selection
+
+The full model will consider the following variables in relation to audience score on Rotten Tomatoes: 
+- Critic score on Rotten Tomatoes
+- IMDB rating
+- Genre
+- Whether or not a movie is in the Top 200 Box Office List
+- MPAA Rating
+
+```{r}
+fullmodel <- lm(audience_score ~ critics_score + imdb_rating + genre + top200_box + mpaa_rating, data = movies)
+summary(fullmodel)$adj.r.squared
+
+#initial full model gave high p value for mpaa_rating. removed and re-evaluated model.
+m1 <- lm(audience_score ~ critics_score + imdb_rating + genre + top200_box, data = movies)
+summary(m1)$adj.r.squared
+
+#removing mpaa-rating gave a higher R^2 value. 
+#Proceeded to remove top200_box variable to determine effect on R^2
+
+m2 <- lm(audience_score ~ critics_score + imdb_rating + genre + mpaa_rating, data = movies)
+summary(m2)$adj.r.squared
+
+#Removed genre to determine effect on R^2 value
+m3 <- lm(audience_score ~ critics_score + imdb_rating + mpaa_rating + top200_box, data = movies)
+summary(m3)$adj.r.squared
+
+#model with critic score, imdb rating, genre and top 200 box gave highest R^2 value.
+#further refined to see if R^2 will increase.
+
+#removetop200box
+m1r <- lm(audience_score ~ critics_score + imdb_rating + genre, data = movies)
+summary(m1r)$adj.r.squared
+
+#remove genre
+m1r2 <- lm(audience_score ~ critics_score + imdb_rating + top200_box, data = movies)
+summary(m1r2)$adj.r.squared
+
+#remove imdb rating
+m1r3 <- lm(audience_score ~ critics_score + genre + top200_box, data = movies)
+summary(m1r3)$adj.r.squared
+
+#remove critics score
+m1r4 <- lm(audience_score ~ imdb_rating + genre + top200_box, data = movies)
+summary(m1r4)$adj.r.squared
+
+#model with critic score, imdb rating and genre gave highest R^2 value
+#conduct final backwards selection to see if removing any variable will increase R^2
+
+summary(lm(audience_score ~ critics_score + imdb_rating, data = movies))$adj.r.squared
+summary(lm(audience_score ~ critics_score + genre, data = movies))$adj.r.squared
+summary(lm(audience_score ~ genre + imdb_rating, data = movies))$adj.r.squared
+```
+Final model for predicting audience score included the following variables: 
+- IMDB rating
+- Critic score on Rotten Tomatoes
+- Genre
+
+```{r}
+summary(m1r)
+```
+
+
+
+* * *
+
+## Prediction of audience score for a 2016 movie
+With the model, I will predict the audience score of a movie that was released in 2016. To do so, a new data set was created to determine if and what movies from 2016 are already included in the original data set. 
+
+```{r}
+movies2016 <- movies %>%
+  filter(thtr_rel_year == 2016)
+sum(movies2016)
+
+```
+No movies from 2016 were found. As a result, any movie released in 2016 can be used. 
+Finding Dory was chosen, which has the following attributes: 
+- IMDB rating = 7.3
+- Critic score on Rotten Tomatoes = 94
+- Genre = Animation, Adventure, Comedy
+
+```{r}
+findingdory <- data.frame(imdb_rating = 7.3, critics_score = 94, genre = "Animation")
+predict(m1r, findingdory, interval = "prediction", level = 0.95)
+```
+The audience score on Rotten Tomatoes for Finding Dory was of 15 July 2022 was 84%. The predicted value of an audience score of 86% is well within the 95% confidence interval calculated. 
+
+Something worth noting is that movies can be classified under multiple genres, which can bias the predicted audience score. The way that movies were categorized in the original data set may have also biased the resulting multiple linear model produced in this analysis. 
+
+A worthwhile exercise was conducted to see how the predicted audience score changed when the genre of Finding Dory changed as well. 
+
+```{r}
+#Prediction if Finding Dory is an adventure film
+findingdoryadv <- data.frame(imdb_rating = 7.3, critics_score = 94, genre = "Action & Adventure")
+predict(m1r, findingdoryadv, interval = "prediction", level = 0.95)
+
+#Prediction if Finding Dory is a comedy film
+findingdorycom <- data.frame(imdb_rating = 7.3, critics_score = 94, genre = "Comedy")
+predict(m1r, findingdorycom, interval = "prediction", level = 0.95)
+```
+
+The calculated audience score values when Finding Dory is labelled as an Action & Adventure or a Comedy both produced lower values than the actual audience score. However, the observed audience score on Rotten Tomatoes is still within the 95% confidence interval calculated. 
+
+* * *
+
+## Conclusion
+
+In conclusion, a multiple linear regression model was created to predict audience scores on Rotten Tomatoes for
+a given movie produced and released before 2016. The model should not be generalized to movies past 2016
+since data was not extensively analyzed for movies released after 2016. However, the model does show
+capacity to predict audience scores on Rotten Tomatoes close to the observed values, as seen with
+the Finding Dory example. 
+
+In doing the analysis, a source of bias that was not initially obvious emerged. Specifically, 
+when characterizing a movie by its genre, the data set was limited in the fact that a movie could
+only take 1 genre, when in reality, movies may be characterized by more than 1 genre. 
+
+Overall, the model showed that the IMDB rating and the critic score on Rotten Tomatoes were the most influential
+predictors in determining what the audience score on Rotten Tomatoes would be. 
